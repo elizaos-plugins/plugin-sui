@@ -1,6 +1,6 @@
 {
     "name": "@elizaos/plugin-sui",
-    "version": "0.1.9",
+    "version": "0.25.6-alpha.1",
     "type": "module",
     "main": "dist/index.js",
     "module": "dist/index.js",
@@ -22,11 +22,14 @@
         "@cetusprotocol/aggregator-sdk": "^0.3.21",
         "@elizaos/core": "workspace:*",
         "@mysten/sui": "^1.16.0",
+        "@mysten/sui.js": "^0.49.1",
         "axios": "^1.7.9",
         "bignumber.js": "9.1.2",
+        "navi-sdk": "^1.4.27",
         "node-cache": "5.1.2",
         "tsup": "8.3.5",
-        "vitest": "2.1.9"
+        "vitest": "2.1.9",
+        "zod": "^3.22.4"
     },
     "devDependencies": {
         "@biomejs/biome": "1.5.3",
@@ -44,5 +47,8 @@
     "peerDependencies": {
         "form-data": "4.0.1",
         "whatwg-url": "7.1.0"
+    },
+    "publishConfig": {
+        "access": "public"
     }
 }
