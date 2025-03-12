@@ -19,7 +19,9 @@ import { z } from "zod";
 export interface SwapPayload extends Content {
     from_token: string;
     destination_token: string;
-    amount: string | number;
+    amount: number;
+    slippage: number | null;
+    min_amount_out: number | null;
 }
 
 function isSwapContent(content: Content): content is SwapPayload {
@@ -27,8 +29,9 @@ function isSwapContent(content: Content): content is SwapPayload {
     return (
         typeof content.from_token === "string" &&
         typeof content.destination_token === "string" &&
-        (typeof content.amount === "string" ||
-            typeof content.amount === "number")
+        typeof content.amount === "number" &&
+        (typeof content.slippage === "number" || content.slippage === null) &&
+        (typeof content.min_amount_out === "number" || content.min_amount_out === null)
     );
 }
 
@@ -39,23 +42,36 @@ Example response:
 {
     "from_token": "sui",
     "destination_token": "usdc",
-    "amount": "1"
+    "amount": 1,
+    "min_amount_out": 0.99,
+    "slippage": 0.01
 }
 \`\`\`
+or
+\`\`\`json
+{
+    "from_token": "0x2::sui::SUI",
+    "destination_token": "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC",
+    "amount": 1,
+    "min_amount_out": 0.99,
+    "slippage": 0.01
+}
+\`\`\`
+
 
 {{recentMessages}}
 
 Given the recent messages, extract the following information about the requested token swap:
-- Source Token you want to swap from
-- Destination token you want to swap to
+- Source Token you want to swap from, use symbol or address
+- Destination token you want to swap to, use symbol or address
 - Source Token Amount to swap
-
+- Slippage percentage to swap
 
 Respond with a JSON markdown block containing only the extracted values.`;
 
 export default {
     name: "SWAP_TOKEN",
-    similes: ["SWAP_TOKENS", "SWAP_SUI"],
+    similes: ["SWAP_TOKENS"],
     validate: async (runtime: IAgentRuntime, message: Memory) => {
         console.log("Validating sui transfer from user:", message.userId);
         return true;
@@ -85,7 +101,12 @@ export default {
         const swapSchema = z.object({
             from_token: z.string(),
             destination_token: z.string(),
-            amount: z.union([z.string(), z.number()]),
+            amount: z.number(),
+            min_amount_out: z.number().nullable().default(0),
+            slippage: z
+                .number()
+                .nullable()
+                .default(0.01),
         });
 
         // Compose transfer context
@@ -113,7 +134,7 @@ export default {
                 if (callback) {
                     callback({
                         text: "Unable to process swap request. Invalid content provided.",
-                        content: { error: "Invalid transfer content" },
+                        content: { error: "Invalid swap content" },
                     });
                 }
                 return false;
@@ -122,13 +143,11 @@ export default {
             const destinationToken = await service.getTokenMetadata(
                 swapContent.destination_token
             );
-
             elizaLogger.log("Destination token:", destinationToken);
 
             const fromToken = await service.getTokenMetadata(
                 swapContent.from_token
             );
-
             elizaLogger.log("From token:", fromToken);
 
             // one action only can call one callback to save new message.
@@ -140,7 +159,13 @@ export default {
                         fromToken
                     );
 
-                    elizaLogger.info("Swap amount:", swapAmount);
+                    elizaLogger.info("Swap amount:", swapAmount.toString());
+
+                    const minAmountOut = service.getAmount(
+                        swapContent.min_amount_out,
+                        destinationToken
+                    );
+                    elizaLogger.info("Min amount out:", minAmountOut.toString());
 
                     elizaLogger.info(
                         "Destination token address:",
@@ -157,15 +182,25 @@ export default {
                     const result = await service.swapToken(
                         fromToken.symbol,
                         swapAmount.toString(),
-                        0,
-                        destinationToken.symbol
+                        swapContent.slippage,
+                        destinationToken.symbol,
+                        Number(minAmountOut.toString())
                     );
 
                     if (result.success) {
                         callback({
-                            text: `Successfully swapped ${swapContent.amount} ${swapContent.from_token} to  ${swapContent.destination_token}, Transaction: ${service.getTransactionLink(
+                            text: `Successfully swapped ${swapContent.amount} ${
+                                swapContent.from_token
+                            } to  ${
+                                swapContent.destination_token
+                            }, Transaction: ${service.getTransactionLink(
                                 result.tx
                             )}`,
+                            content: swapContent,
+                        });
+                    } else {
+                        callback({
+                            text: `Failed to swap ${result.message}`,
                             content: swapContent,
                         });
                     }
@@ -202,7 +237,7 @@ export default {
             {
                 user: "{{user1}}",
                 content: {
-                    text: "Swap 1 SUI to USDC",
+                    text: "Swap 1 SUI to USDC, slippage 0.01",
                 },
             },
             {
@@ -223,20 +258,20 @@ export default {
             {
                 user: "{{user1}}",
                 content: {
-                    text: "Swap 1 USDC to SUI",
+                    text: "Swap 1 0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC to SUI, slippage 0.01",
                 },
             },
             {
                 user: "{{user2}}",
                 content: {
-                    text: "I'll help you swap 1 SUI to USDC now...",
+                    text: "I'll help you swap 1 USDC to SUI now...",
                     action: "SWAP_TOKEN",
                 },
             },
             {
                 user: "{{user2}}",
                 content: {
-                    text: "Successfully swapped 1 SUI to USDC, Transaction: 0x39a8c432d9bdad993a33cc1faf2e9b58fb7dd940c0425f1d6db3997e4b4b05c0",
+                    text: "Successfully swapped 1 USDC to SUI, Transaction: 0x39a8c432d9bdad993a33cc1faf2e9b58fb7dd940c0425f1d6db3997e4b4b05c0",
                 },
             },
         ],

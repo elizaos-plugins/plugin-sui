@@ -19,7 +19,8 @@
         "dist"
     ],
     "dependencies": {
-        "@cetusprotocol/aggregator-sdk": "^0.3.21",
+        "@cetusprotocol/aggregator-sdk": "^0.3.27",
+        "@cetusprotocol/cetus-sui-clmm-sdk": "^5.3.4",
         "@mysten/sui": "^1.16.0",
         "axios": "^1.7.9",
         "bignumber.js": "9.1.2",
